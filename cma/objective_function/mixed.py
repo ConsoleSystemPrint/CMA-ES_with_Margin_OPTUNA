@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+from .base import MultiObjectiveFunction
 from ..objective_function.base import *
 import numpy as np
 
@@ -210,5 +210,133 @@ class EllipsoidInt(ObjectiveFunction):
         SI[:,(self.d - self.ind):] = np.round(SI[:,(self.d - self.ind):])
         tmp = SI * self.coefficient
         evals = (tmp**2).sum(axis=1)
+        self._update_best_eval(evals)
+        return evals
+
+
+class EllipsoidOneMax(MultiObjectiveFunction):
+    """
+    Multi-objective Ellipsoid function + OneMax
+    """
+    minimization_problem = True
+
+    def __init__(self, d, ind, bid, ratio=None, target_eval=[1e-10, 1e-10], max_eval=1e4):
+        super(EllipsoidOneMax, self).__init__(target_eval, max_eval)
+        if ratio is None:
+            ratio = 1.
+        self.d = d
+        self.ind = 0
+        self.bid = bid
+        self.r = ratio
+        self.coefficient = 1000 ** (np.arange(d - bid) / float(d - bid - 1))
+
+    def __call__(self, X):
+        """
+        :param X: candidate solutions
+        :type X: array_like, shape=(lam, d), dtype=float
+        :return: evaluation values
+        :rtype: array_like, shape=(lam, 2), dtype=float
+        """
+        self.eval_count += len(X)
+        S = np.array(X)[:, :(self.d - self.bid)]
+        tmp = S * self.coefficient
+        B = (0. < np.array(X)[:, (self.d - self.bid):])
+        evals1 = (tmp**2).sum(axis=1)
+        evals2 = self.r * (self.bid - B.sum(axis=1))
+        evals = np.column_stack((evals1, evals2))
+        self._update_best_eval(evals)
+        return evals
+
+
+class EllipsoidLeadingOnes(MultiObjectiveFunction):
+    """
+    Multi-objective Ellipsoid function + LeadingOnes
+    """
+    minimization_problem = True
+
+    def __init__(self, d, ind, bid, ratio=None, target_eval=[1e-10, 1e-10], max_eval=1e4):
+        super(EllipsoidLeadingOnes, self).__init__(target_eval, max_eval)
+        if ratio is None:
+            ratio = 1.
+        self.d = d
+        self.ind = 0
+        self.bid = bid
+        self.r = ratio
+        self.coefficient = 1000 ** (np.arange(d - bid) / float(d - bid - 1))
+
+    def __call__(self, X):
+        """
+        :param X: candidate solutions
+        :type X: array_like, shape=(lam, d), dtype=float
+        :return: evaluation values
+        :rtype: array_like, shape=(lam, 2), dtype=float
+        """
+        self.eval_count += len(X)
+        S = np.array(X)[:, :(self.d - self.bid)]
+        tmp = S * self.coefficient
+        B = (0. < np.array(X)[:, (self.d - self.bid):])
+        evals1 = (tmp**2).sum(axis=1)
+        evals2 = self.r * (self.bid - (B.argmin(axis=1) + B.prod(axis=1) * (self.bid)))
+        evals = np.column_stack((evals1, evals2))
+        self._update_best_eval(evals)
+        return evals
+
+
+class EllipsoidInt(MultiObjectiveFunction):
+    """
+    Multi-objective Ellipsoid function(rounding(x))
+    """
+    minimization_problem = True
+
+    def __init__(self, d, ind, bid, ratio=None, target_eval=[1e-10, 1e-10], max_eval=1e4):
+        super(EllipsoidInt, self).__init__(target_eval, max_eval)
+        if ratio is None:
+            ratio = 1.
+        self.d = d
+        self.ind = ind
+        self.bid = bid
+        self.r = ratio
+        self.coefficient = 1000 ** (np.arange(d) / float(d - 1))
+
+    def __call__(self, X):
+        """
+        :param X: candidate solutions
+        :type X: array_like, shape=(lam, d), dtype=float
+        :return: evaluation values
+        :rtype: array_like, shape=(lam, 2), dtype=float
+        """
+        self.eval_count += len(X)
+        SI = np.array(X)
+        SI[:,(self.d - self.ind):] = np.round(SI[:,(self.d - self.ind):])
+        tmp = SI * self.coefficient
+        evals1 = (tmp**2).sum(axis=1)
+        evals2 = self.r * (self.bid - (np.round(SI[:,(self.d - self.ind):]) != 0).sum(axis=1))
+        evals = np.column_stack((evals1, evals2))
+        self._update_best_eval(evals)
+        return evals
+
+
+class LeadingOnes(ObjectiveFunction):
+    """
+    LeadingOnes: :math:`f(x) = \\sum_{i=1}^{bid} \\prod_{j=1}^i x_j`
+    """
+    minimization_problem = True
+
+    def __init__(self, d, ind, bid, target_eval=1e-10, max_eval=1e4):
+        super(LeadingOnes, self).__init__(target_eval, max_eval)
+        self.d = d
+        self.ind = ind
+        self.bid = bid
+
+    def __call__(self, X):
+        """
+        :param X: candidate solutions
+        :type X: array_like, shape=(lam, d), dtype=float
+        :return: evaluation values
+        :rtype: array_like, shape=(lam), dtype=float
+        """
+        self.eval_count += len(X)
+        B = ( 0. < np.array(X) )
+        evals = self.bid - (B.argmin(axis=1) + B.prod(axis=1) * (self.bid))
         self._update_best_eval(evals)
         return evals
